@@ -74,7 +74,6 @@ namespace FortitudeFramework
             private Vector2 position;
             public Vector2 Top, Bottom, Left, Right;
             public int height, width;
-            public int checkCollisionVariable;
 
             //Which side the collision is taking place...
             public bool left, right, up, down;
@@ -84,8 +83,6 @@ namespace FortitudeFramework
                 position = pos;
                 height = hgt;
                 width = wdt;
-
-                checkCollisionVariable = 0;
 
                 Top = new Vector2(position.X, position.Y);
                 Bottom = new Vector2(position.X, position.Y + height);
@@ -168,42 +165,54 @@ namespace FortitudeFramework
             public bool checkCollision(collisionRectangle rect)
             {
                 Vector2 rectPos = rect.position;
-                checkCollisionVariable = 2;
 
                 //if to the far left...
-                if (position.X + width <= rectPos.X)
+                if (rectPos.X > position.X)
                 {
-                    right = false;
-                    return false;
+                    if (position.X + width < rectPos.X)
+                    {
+                        right = false;
+                        return false;
+                    }
+                    else
+                        right = true;
                 }
-                else
-                    right = true;
 
-                if (rectPos.X + rect.width < position.X)
-                {
-                    left = false;
-                    return false;
-                }
                 else
-                    left = true;
+                {
+                    if (rectPos.X + rect.width < position.X)
+                    {
+                        left = false;
+                        return false;
+                    }
+                    else
+                        left = true;
+                }
 
-                if (position.Y + height < rectPos.Y)
+                if (rectPos.Y > position.Y)
                 {
-                    down = false;
-                    return false;
+                    if (position.Y + height < rectPos.Y)
+                    {
+                        down = false;
+                        return false;
+                    }
+                    else
+                        down = true;
                 }
-                else
-                    down = true;
 
-                if (rectPos.Y + rect.height < position.Y)
-                {
-                    up = false;
-                    return false;
-                }
                 else
-                    up = true;
+                {
+                    if (rectPos.Y + rect.height < position.Y)
+                    {
+                        up = false;
+                        return false;
+                    }
+                    else
+                        up = true;
+                }
 
                 return true;
+                
             }
             //----------------------------------------------COLLISION-CHECKING---------------------------------------
 
@@ -501,8 +510,8 @@ namespace FortitudeFramework
         {
             batch.Draw(background[0], backPositions[0], sourceRect[0], Color.White);
 
-            batch.DrawString(GameInformation.getFont(), "Frames[1] = " + animatable.getFrameIndex(1).X,
-                new Vector2(200, 200), Color.Ivory);
+            /*batch.DrawString(GameInformation.getFont(), "Frames[1] = " + animatable.getFrameIndex(1).X,
+                new Vector2(200, 200), Color.Ivory);*/
         }
         //---------------------------------------------------------DRAWING--------------------------------------------
     }
@@ -615,6 +624,7 @@ namespace FortitudeFramework
         protected Vector2 Position;                           //Position of the entity
         protected float xSpeed, ySpeed;                       //The speed with which the entity moves...
         protected const float Gravity = 1f;                //The gravity that needs to be applied on entities if platformer
+        protected int acceleration;                         //Acceleration used for falling...
         protected float fallingSpeed = 0;                     //The speed with which the entity will fall
         protected float jumpingSpeed = 0;                     //The speed with which the entity jumps
 
@@ -624,13 +634,21 @@ namespace FortitudeFramework
         //Platformer states
         protected bool isJumping = false;                     //Whether the entity is jumping
         protected int jumpTiming = 0;                         //Timing of how long jump should last...
+        protected int jumpHeight = 0;                         //How high player has jumped...
         protected bool jumpApex = false;                      //Stay in air for some time
         protected bool isFalling = false;                     //Whether the entity is falling
         protected enum SideFacing
         {
             LEFT,
-            RIGHT
+            RIGHT,
+            UP,
+            DOWN,
+            NEUTRAL
         }
+
+        //Deleting and killing entities...
+        protected bool timeForTermination;                      //Play dying sequence...
+        protected bool timeForDeletion;                        //Set the entity reference to null..
 
         protected SideFacing facing;                           //In case of platformers, where the entity is facing...
 
@@ -756,7 +774,7 @@ namespace FortitudeFramework
 
         //Implementing individual updates...
         //-------------------------------------------PLATFORMER------------------------------------------------
-        protected void fallingUpdate(float Speed)
+        /*protected void fallingUpdate(float Speed)
         {
             if (isFalling == true)
             {
@@ -770,6 +788,32 @@ namespace FortitudeFramework
                 fallingSpeed = 0;
 
             Position.Y += fallingSpeed;
+        }*/
+
+        protected void fallingUpdate(float Speed)
+        {
+            if (isFalling == true)
+                //fallingSpeed = Speed;
+                Position.Y += Speed;
+
+            /*else
+                fallingSpeed = 0;*/
+
+            //Position.Y += fallingSpeed;
+        }
+
+        //Add acceleration, keep adding it to the ySpeed...
+        protected void RealfallingUpdate(float Speed)
+        {
+            if (isFalling == true)
+            {
+                if (acceleration < Speed)
+                    acceleration += (int)Gravity;
+            }
+            else
+                acceleration = 0;
+
+            Position.Y += acceleration;
         }
 
         protected void checkFalling(List<Physics.collisionRectangle> colPos)
@@ -797,7 +841,7 @@ namespace FortitudeFramework
                 if (isJumping == true)
                 {
                     jumpTiming += 1;
-                Position.Y -= speed;
+                    Position.Y -= speed;
                 }
 
                 if(jumpTiming > jumpTime)
@@ -810,13 +854,24 @@ namespace FortitudeFramework
                 {
                     jumpTiming += 1;
 
-                    if(jumpTiming > apexTime)
+                    if(jumpTiming > jumpTime + apexTime)
                     {
                         jumpApex = false;
                         jumpTiming = 0;
                     }
                 }
         }
+
+        /*protected void jumpingUpdateReal(float initialYValue, float Speed)
+        {
+            if (isJumping == true)
+            {
+                if (initialYValue - Position.Y <= GameInformation.getGridHeight() * 3)
+                    isJumping = false;
+                else
+                    Position.Y -= Speed;
+            }
+        }*/
 
         protected void positionUpdate()
         {
@@ -890,18 +945,18 @@ namespace FortitudeFramework
         public void DrawPlatformer(SpriteBatch batch)
         {
             //Whether facing left or right...
-            /*switch(facing)
+            switch(facing)
             {
                 case SideFacing.LEFT:
-                    batch.Draw(Sprite, drawRectangle, sourceRectangle, Color.White, 0f, Vector2.Zero, SpriteEffects.None, 0f);
+                    batch.Draw(Sprite, drawRectangle, sourceRect, Color.White, 0f, Vector2.Zero, SpriteEffects.None, 0f);
                     break;
 
                 case SideFacing.RIGHT:
-                    batch.Draw(Sprite, drawRectangle, sourceRectangle, Color.White, 0f, Vector2.Zero, SpriteEffects.FlipVertically, 0f);
+                    batch.Draw(Sprite, drawRectangle, sourceRect, Color.White, 0f, Vector2.Zero, SpriteEffects.FlipHorizontally, 0f);
                     break;
-            }*/
+            }
 
-            batch.Draw(Sprite, drawRectangle, sourceRect, Color.White);
+            //batch.Draw(Sprite, drawRectangle, sourceRect, Color.White);
         }
 
         public void Draw(SpriteBatch batch)
